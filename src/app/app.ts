@@ -1,11 +1,6 @@
 
-import { Component } from '@angular/core';
-
-interface Task {
-  id: number;
-  title: string;
-  completed: boolean;
-}
+import { Component, OnInit } from '@angular/core';
+import { Task, TaskService } from './task.service';
 
 type TaskFilter = 'all' | 'active' | 'completed';
 
@@ -16,17 +11,38 @@ type TaskFilter = 'all' | 'active' | 'completed';
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
-export class App {
+export class App implements OnInit {
 
-  tasks: Task[] = [
-    { id: 1, title: 'Stworzyć frontend w Angularze', completed: true },
-    { id: 2, title: 'Stworzyć backend w PHP', completed: false },
-    { id: 3, title: 'Połączyć Angular z PHP', completed: false },
-    { id: 4, title: 'Skonfigurować bazę MySQL', completed: false }
-  ];
+  tasks: Task[] = [];
 
   newTaskTitle = '';
   filter: TaskFilter = 'all';
+
+  loading = true;
+  errorMessage = '';
+
+  constructor(private taskService: TaskService) {}
+
+  // Pobieranie zadań po uruchomieniu strony
+  ngOnInit(): void {
+    this.loadTasks();
+  }
+
+  loadTasks(): void {
+    this.loading = true;
+
+    this.taskService.getTasks().subscribe({
+      next: (tasks) => {
+        this.tasks = tasks;
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Błąd pobierania zadań:', error);
+        this.errorMessage = 'Nie udało się pobrać zadań.';
+        this.loading = false;
+      }
+    });
+  }
 
   get completedCount(): number {
     return this.tasks.filter(task => task.completed).length;
@@ -52,35 +68,68 @@ export class App {
     this.newTaskTitle = (event.target as HTMLInputElement).value;
   }
 
+  // Dodawanie zadania do MongoDB
   addTask(): void {
     const title = this.newTaskTitle.trim();
 
     if (!title) return;
 
-    const newTask: Task = {
-      id: Date.now(),
-      title: title,
-      completed: false
-    };
-
-    this.tasks = [...this.tasks, newTask];
-    this.newTaskTitle = '';
+    this.taskService.addTask(title).subscribe({
+      next: (newTask) => {
+        this.tasks = [...this.tasks, newTask];
+        this.newTaskTitle = '';
+        this.errorMessage = '';
+      },
+      error: (error) => {
+        console.error('Błąd dodawania zadania:', error);
+        this.errorMessage = 'Nie udało się dodać zadania.';
+      }
+    });
   }
 
-  toggleTask(id: number): void {
-    this.tasks = this.tasks.map(task =>
-      task.id === id
-        ? { ...task, completed: !task.completed }
-        : task
-    );
+  // Zmiana statusu zadania w MongoDB
+  toggleTask(id: string): void {
+    const task = this.tasks.find(task => task.id === id);
+
+    if (!task) return;
+
+    this.taskService.updateTask(id, {
+      completed: !task.completed
+    }).subscribe({
+      next: (updatedTask) => {
+        this.tasks = this.tasks.map(task =>
+          task.id === id ? updatedTask : task
+        );
+        this.errorMessage = '';
+      },
+      error: (error) => {
+        console.error('Błąd aktualizacji zadania:', error);
+        this.errorMessage = 'Nie udało się zmienić statusu zadania.';
+      }
+    });
   }
 
-  removeTask(id: number): void {
-    this.tasks = this.tasks.filter(task => task.id !== id);
+  // Usuwanie zadania z MongoDB
+  removeTask(id: string): void {
+    this.taskService.deleteTask(id).subscribe({
+      next: () => {
+        this.tasks = this.tasks.filter(task => task.id !== id);
+        this.errorMessage = '';
+      },
+      error: (error) => {
+        console.error('Błąd usuwania zadania:', error);
+        this.errorMessage = 'Nie udało się usunąć zadania.';
+      }
+    });
   }
 
+  // Usuwanie wszystkich wykonanych zadań
   clearCompleted(): void {
-    this.tasks = this.tasks.filter(task => !task.completed);
+    const completedTasks = this.tasks.filter(task => task.completed);
+
+    completedTasks.forEach(task => {
+      this.removeTask(task.id);
+    });
   }
 
   setFilter(filter: TaskFilter): void {

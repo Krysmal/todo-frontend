@@ -1,5 +1,5 @@
 
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { Task, TaskService } from './task.service';
 
 type TaskFilter = 'all' | 'active' | 'completed';
@@ -21,7 +21,10 @@ export class App implements OnInit {
   loading = true;
   errorMessage = '';
 
-  constructor(private taskService: TaskService) {}
+  constructor(
+  private taskService: TaskService,
+  private cdr: ChangeDetectorRef
+) {}
 
   // Pobieranie zadań po uruchomieniu strony
   ngOnInit(): void {
@@ -29,20 +32,25 @@ export class App implements OnInit {
   }
 
   loadTasks(): void {
-    this.loading = true;
+  this.loading = true;
 
-    this.taskService.getTasks().subscribe({
-      next: (tasks) => {
-        this.tasks = tasks;
-        this.loading = false;
-      },
-      error: (error) => {
-        console.error('Błąd pobierania zadań:', error);
-        this.errorMessage = 'Nie udało się pobrać zadań.';
-        this.loading = false;
-      }
-    });
-  }
+  this.taskService.getTasks().subscribe({
+    next: (tasks) => {
+      this.tasks = tasks;
+      this.loading = false;
+
+      // Informujemy Angulara o zmianie danych
+      this.cdr.markForCheck();
+    },
+    error: (error) => {
+      console.error('Błąd pobierania zadań:', error);
+      this.errorMessage = 'Nie udało się pobrać zadań.';
+      this.loading = false;
+
+      this.cdr.markForCheck();
+    }
+  });
+}
 
   get completedCount(): number {
     return this.tasks.filter(task => task.completed).length;
